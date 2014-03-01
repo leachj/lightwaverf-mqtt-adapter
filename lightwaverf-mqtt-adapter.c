@@ -1,17 +1,17 @@
-/*******************************************************************************
- * Copyright (c) 2012, 2013 IBM Corp.
+/*
+ * Copyright (c) 2014 Jonathan Leach
  *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * and Eclipse Distribution License v1.0 which accompany this distribution. 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * The Eclipse Public License is available at 
- *   http://www.eclipse.org/legal/epl-v10.html
- * and the Eclipse Distribution License is available at 
- *   http://www.eclipse.org/org/documents/edl-v10.php.
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Contributors:
- *    Ian Craggs - initial contribution
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *******************************************************************************/
 
 #include "json.h"
@@ -29,9 +29,12 @@
 
 static byte nibbles[] = {0xF6,0xEE,0xED,0xEB,0xDE,0xDD,0xDB,0xBE,0xBD,0xBB,0xB7,0x7E,0x7D,0x7B,0x77,0x6F};
 
-char* code;
-int level;
-int unit;
+typedef struct
+{
+   char* code;
+   int level;
+   int unit;
+} Command;
 
 volatile MQTTAsync_token deliveredtoken;
 
@@ -40,23 +43,23 @@ int subscribed = 0;
 int finished = 0;
 
 
-void json_parse(json_object * jobj) {
+void json_parse(json_object * jobj, Command* command) {
   enum json_type type;
   json_object_object_foreach(jobj, key, val) { /*Passing through every array element*/
 
   type = json_object_get_type(val);
 
   if(strcmp(key,"code") == 0 && type == json_type_string){
-	code = json_object_get_string(val);
-	printf("found code %s\n",code);
+	command->code = json_object_get_string(val);
+	printf("found code %s\n",command->code);
   }
   if(strcmp(key,"unit") == 0 && type == json_type_int){
-	unit = json_object_get_int(val);
-	printf("found unit %d\n",unit);
+	command->unit = json_object_get_int(val);
+	printf("found unit %d\n",command->unit);
   }
   if(strcmp(key,"level") == 0 && type == json_type_int){
-	level = json_object_get_int(val);
-	printf("found level %d\n",level);
+	command->level = json_object_get_int(val);
+	printf("found level %d\n",command->level);
   }
   }
 }
@@ -83,36 +86,37 @@ void connlost(void *context, char *cause)
 
 int msgarrvd(void *context, char *topicName, int topicLen, MQTTAsync_message *message)
 {
+
+    Command command;
     int i;
     char* payloadptr;
 
     payloadptr = message->payload;
-    
+   
+    printf("Received JSON request: %s\n",payloadptr);
+
     json_object * jobj = json_tokener_parse(payloadptr);     
-    json_parse(jobj);
-    long number = strtol(code, NULL, 16);
+    json_parse(jobj,&command);
 
-    char xlate[] = "0123456789abcdef";
-    byte b1 = ((strchr(xlate, *code) - xlate) * 16) + ((strchr(xlate, *(code + 1)) - xlate));
-    byte b2 = ((strchr(xlate, *(code+2)) - xlate) * 16) + ((strchr(xlate, *(code + 3)) - xlate));
-    byte b3 = ((strchr(xlate, *(code+4)) - xlate) * 16) + ((strchr(xlate, *(code + 5)) - xlate));
-    byte b4 = ((strchr(xlate, *(code+6)) - xlate) * 16) + ((strchr(xlate, *(code + 7)) - xlate));
-    byte b5 = ((strchr(xlate, *(code+8)) - xlate) * 16) + ((strchr(xlate, *(code + 9)) - xlate));
-    byte b6 = ((strchr(xlate, *(code+10)) - xlate) * 16) + ((strchr(xlate, *(code + 11)) - xlate));
-
-    printf("%02x %02x %02x %02x %02x %02x", b1,b2,b3,b4,b5,b6);
+    int count;
+    char *pos = command.code;
+    byte codeParts[6];
+    for(count = 0; count < 6; count++) {
+        sscanf(pos, "%2hhx", &codeParts[count]);
+        pos += 2;
+    }
 
     byte bytes[10];
     bytes[0] = 0xf6;
     bytes[1] = 0xf6;
-    bytes[2] = nibbles[unit];
-    bytes[3] = nibbles[level];
-    bytes[4] = b1;
-    bytes[5] = b2;
-    bytes[6] = b3;
-    bytes[7] = b4;
-    bytes[8] = b5;
-    bytes[9] = b6;
+    bytes[2] = nibbles[command.unit];
+    bytes[3] = nibbles[command.level];
+    bytes[4] = codeParts[0];
+    bytes[5] = codeParts[1];
+    bytes[6] = codeParts[2];
+    bytes[7] = codeParts[3];
+    bytes[8] = codeParts[4];
+    bytes[9] = codeParts[5];
 
     lw_send(bytes);
 

@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS += -std=c99
+CFLAGS += -std=c99 -ggdb
 CFLAGS += $(shell pkg-config --cflags json)
 LDFLAGS += $(shell pkg-config --libs json)
 
