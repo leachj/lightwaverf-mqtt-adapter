@@ -118,6 +118,14 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTAsync_message *me
     bytes[8] = codeParts[4];
     bytes[9] = codeParts[5];
 
+    int j;
+    for (j = 0; j < 10; j++)
+    {
+        if (j > 0) printf(":");
+        printf("%02X", bytes[j]);
+    }
+    printf("\n");
+
     lw_send(bytes);
 
     json_object_put(jobj);
