@@ -18,6 +18,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
+#include <unistd.h>
 #include "MQTTAsync.h"
 #include "lightwaverf.h"
 
@@ -31,7 +32,7 @@ static byte nibbles[] = {0xF6,0xEE,0xED,0xEB,0xDE,0xDD,0xDB,0xBE,0xBD,0xBB,0xB7,
 
 typedef struct
 {
-   char* code;
+   const char* code;
    int level;
    int unit;
 } Command;
@@ -99,7 +100,7 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTAsync_message *me
     json_parse(jobj,&command);
 
     int count;
-    char *pos = command.code;
+    const char *pos = command.code;
     byte codeParts[6];
     for(count = 0; count < 6; count++) {
         sscanf(pos, "%2hhx", &codeParts[count]);
@@ -171,8 +172,6 @@ void onConnect(void* context, MQTTAsync_successData* response)
 
 	printf("Successful connection\n");
 
-	printf("Subscribing to topic %s\nfor client %s using QoS%d\n\n"
-           "Press Q<Enter> to quit\n\n", TOPIC, CLIENTID, QOS);
 	opts.onSuccess = onSubscribe;
 	opts.onFailure = onSubscribeFailure;
 	opts.context = client;
@@ -214,20 +213,17 @@ int main(int argc, char* argv[])
 		exit(-1);	
 	}
 
-	while	(!subscribed)
-		#if defined(WIN32)
-			Sleep(100);
-		#else
-			usleep(10000L);
-		#endif
+	while	(!subscribed){
+			sleep(10);
+	}
 
 	if (finished)
 		goto exit;
 
-	do 
-	{
-		ch = getchar();
-	} while (ch!='Q' && ch != 'q');
+
+	while(!finished){
+	    sleep(10);
+	}
 
 	disc_opts.onSuccess = onDisconnect;
 	if ((rc = MQTTAsync_disconnect(client, &disc_opts)) != MQTTASYNC_SUCCESS)
@@ -236,11 +232,7 @@ int main(int argc, char* argv[])
 		exit(-1);	
 	}
  	while	(!disc_finished)
-		#if defined(WIN32)
-			Sleep(100);
-		#else
-			usleep(10000L);
-		#endif
+			sleep(10);
 
 exit:
 	MQTTAsync_destroy(&client);
