@@ -127,7 +127,11 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTAsync_message *me
     }
     printf("\n");
 
-    lw_send(bytes);
+    if(command.level < 2) {
+	lw_send(bytes);
+    } else if(command.level > 1 && command.level < 32) {
+    	lw_cmd(0x80 + command.level,command.unit,LW_ON,codeParts);
+    }    
 
     json_object_put(jobj);
     MQTTAsync_freeMessage(&message);
