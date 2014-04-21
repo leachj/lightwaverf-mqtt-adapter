@@ -24,7 +24,8 @@
 
 #define ADDRESS     "tcp://192.168.1.70:1883"
 #define CLIENTID    "lightwaverf-mqtt-adapter"
-#define TOPIC       "lightwaverf"
+#define RECEIVE_TOPIC       "lightwaverf-send"
+#define SEND_TOPIC       "lightwaverf-receive"
 #define QOS         1
 #define TIMEOUT     10000L
 
@@ -182,11 +183,18 @@ void onConnect(void* context, MQTTAsync_successData* response)
 
 	deliveredtoken = 0;
 
-	if ((rc = MQTTAsync_subscribe(client, TOPIC, QOS, &opts)) != MQTTASYNC_SUCCESS)
+	if ((rc = MQTTAsync_subscribe(client, RECEIVE_TOPIC, QOS, &opts)) != MQTTASYNC_SUCCESS)
 	{
 		printf("Failed to start subscribe, return code %d\n", rc);
 		exit(-1);	
 	}
+}
+
+int findNibble(byte b) {
+  for(int i=0;i<16;i++) {
+    if (b == nibbles[i]) return i;
+  }
+  return -1;
 }
 
 
@@ -226,7 +234,32 @@ int main(int argc, char* argv[])
 
 
 	while(!finished){
-	    sleep(10);
+	
+		byte msg[10];
+  		byte len = 10;
+
+  		lw_rx_wait();
+  		lw_get_message(msg,&len);
+		int i;
+		printf("Received: ");
+  		for(i=0;i<len;i++) {
+    			printf("%02X ",msg[i]);
+  		}
+  		printf("\n");
+
+		char buf[100];
+
+		sprintf(buf, "{\"unit\":\"%d\",\"level\":\"%d\",\"code\":\"%02x%02x%02x%02x%02x%02x\"}", findNibble(msg[2]), findNibble(msg[3]), msg[4], msg[5], msg[6], msg[7], msg[8], msg[9]);
+
+		MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
+	        MQTTAsync_message pubmsg = MQTTAsync_message_initializer;
+		opts.context = client;
+		pubmsg.payload = buf;
+        	pubmsg.payloadlen = strlen(buf);
+        	pubmsg.qos = 1;
+        	pubmsg.retained = 0;
+		MQTTAsync_sendMessage(client, SEND_TOPIC, &pubmsg, &opts);
+
 	}
 
 	disc_opts.onSuccess = onDisconnect;
